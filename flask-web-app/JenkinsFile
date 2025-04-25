@@ -12,46 +12,51 @@ pipeline {
   }
 
   stages {
-    
+
+    // Checkout the repository
     stage('Checkout') {
       steps {
         checkout scm
       }
     }
 
+    // Install necessary dependencies
     stage('Install Dependencies') {
       steps {
-        sh 'pip install flask'
+        sh 'pip install -r requirements.txt'  // Assuming you have a requirements.txt file
       }
     }
 
+    // Static Code Analysis with SonarQube
     stage('Static Code Analysis') {
       steps {
         withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
           script {
-            // Ensure SonarQube Scanner is available and install necessary dependencies
+            // Install necessary dependencies for SonarQube analysis
             sh '''
               apt-get update -y
               apt-get install -y openjdk-17-jdk wget unzip
-    
-              # Download and extract Sonar Scanner
+
+              # Download Sonar Scanner
               wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
               unzip sonar-scanner-cli-5.0.1.3006-linux.zip -d /opt/
-    
+
               # Add Sonar Scanner to the PATH
               export PATH=$PATH:/opt/sonar-scanner-5.0.1.3006-linux/bin
-    
-              # Run SonarQube Analysis
+
+              # Run SonarQube analysis
               sonar-scanner \
                 -Dsonar.projectKey=flask-app \
                 -Dsonar.sources=. \
                 -Dsonar.host.url=${SONAR_URL} \
                 -Dsonar.login=$SONAR_AUTH_TOKEN
             '''
+          }
         }
       }
     }
 
+    // Build Docker Image
     stage('Docker Build & Push') {
       steps {
         script {
@@ -63,6 +68,7 @@ pipeline {
       }
     }
 
+    // Update Deployment Manifest (Helm or Kubernetes YAML)
     stage('Update Deployment Manifest') {
       steps {
         withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
@@ -78,6 +84,7 @@ pipeline {
       }
     }
 
+    // Deploy with Argo CD
     stage('Deploy with Argo CD') {
       steps {
         withCredentials([string(credentialsId: 'argocd-token', variable: 'ARGO_TOKEN')]) {
@@ -88,6 +95,18 @@ pipeline {
           '''
         }
       }
+    }
+  }
+
+  post {
+    always {
+      echo "Build completed"
+    }
+    success {
+      echo "Build was successful"
+    }
+    failure {
+      echo "Build failed, please check logs"
     }
   }
 }
