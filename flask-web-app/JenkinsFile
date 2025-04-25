@@ -12,7 +12,7 @@ pipeline {
   }
 
   stages {
-    
+
     stage('Checkout') {
       steps {
         checkout scm
@@ -29,6 +29,12 @@ pipeline {
       steps {
         withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
           sh '''
+            apt-get update && \
+            apt-get install -y unzip wget openjdk-17-jre && \
+            wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip && \
+            unzip sonar-scanner-cli-5.0.1.3006-linux.zip && \
+            mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner && \
+            export PATH=$PATH:/opt/sonar-scanner/bin && \
             sonar-scanner \
               -Dsonar.projectKey=flask-app \
               -Dsonar.sources=. \
@@ -78,4 +84,3 @@ pipeline {
     }
   }
 }
-
