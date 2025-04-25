@@ -8,11 +8,11 @@ pipeline {
 
   environment {
     DOCKER_IMAGE = "abeshith/flask-web-app:${BUILD_NUMBER}"
-    SONAR_URL = "http://<SONAR_HOST>:9000" // Replace with your SonarQube IP
+    SONAR_URL = "http://localhost:9000"  // Local SonarQube URL
   }
 
   stages {
-
+    
     stage('Checkout') {
       steps {
         checkout scm
@@ -29,13 +29,10 @@ pipeline {
       steps {
         withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
           sh '''
-            apt-get update && \
-            apt-get install -y unzip wget openjdk-17-jre && \
-            wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip && \
-            unzip sonar-scanner-cli-5.0.1.3006-linux.zip && \
-            mv sonar-scanner-5.0.1.3006-linux /opt/sonar-scanner && \
-            export PATH=$PATH:/opt/sonar-scanner/bin && \
-            sonar-scanner \
+            apt-get update && apt-get install -y openjdk-17-jdk wget unzip
+            wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+            unzip sonar-scanner-cli-5.0.1.3006-linux.zip
+            ./sonar-scanner-5.0.1.3006-linux/bin/sonar-scanner \
               -Dsonar.projectKey=flask-app \
               -Dsonar.sources=. \
               -Dsonar.host.url=${SONAR_URL} \
@@ -64,7 +61,7 @@ pipeline {
             git config user.name "Abeshith"
             sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" k8s/deployment.yaml
             git add k8s/deployment.yaml
-            git commit -m "Updated image tag to ${BUILD_NUMBER}"
+            git commit -m "Updated image tag to ${BUILD_NUMBER}" || echo "No changes to commit"
             git push https://${GITHUB_TOKEN}@github.com/Abeshith/your-repo-name HEAD:main
           '''
         }
@@ -75,7 +72,7 @@ pipeline {
       steps {
         withCredentials([string(credentialsId: 'argocd-token', variable: 'ARGO_TOKEN')]) {
           sh '''
-            curl -X POST http://<ARGOCD_HOST>/api/v1/applications/flask-app/sync \
+            curl -X POST http://argocd.mycompany.com/api/v1/applications/flask-app/sync \
               -H "Authorization: Bearer $ARGO_TOKEN" \
               -H "Content-Type: application/json"
           '''
