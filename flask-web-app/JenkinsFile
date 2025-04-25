@@ -1,89 +1,42 @@
 pipeline {
-  agent {
-    docker {
-      image 'abeshith/python-docker:3.9'
-      args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
-    }
-  }
-
-  environment {
-    DOCKER_IMAGE = "abeshith/flask-web-app:${BUILD_NUMBER}"
-    SONAR_URL = "http://host.docker.internal:9000"  // Local SonarQube URL
-  }
-
-  stages {
-
-    // Checkout the repository
-    stage('Checkout') {
-      steps {
-        checkout scm
-      }
-    }
-
-    // Install necessary dependencies
-    stage('Install Dependencies') {
-      steps {
-        // Install Flask directly if you don't have a requirements.txt
-        sh 'pip install flask'
-        
-        // If you do have a requirements.txt, uncomment the following line:
-        // sh 'pip install -r requirements.txt'
-      }
-    }
-
-    // Static Code Analysis with SonarQube
-
-    // Build Docker Image
-    stage('Docker Build & Push') {
-      steps {
-        script {
-          sh 'docker build -t ${DOCKER_IMAGE} .'
-          docker.withRegistry('https://index.docker.io/v1/', 'docker-cred') {
-            docker.image("${DOCKER_IMAGE}").push()
-          }
+    agent {
+        docker {
+            image 'docker:latest'
+            args '-v /var/run/docker.sock:/var/run/docker.sock' // gives container access to host docker daemon
         }
-      }
     }
 
-    // Update Deployment Manifest (Helm or Kubernetes YAML)
-    stage('Update Deployment Manifest') {
-      steps {
-        withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
-          sh '''
-            git config user.email "abheshith7@gmail.com"
-            git config user.name "Abeshith"
-            sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" k8s/deployment.yaml
-            git add k8s/deployment.yaml
-            git commit -m "Updated image tag to ${BUILD_NUMBER}" || echo "No changes to commit"
-            git push https://${GITHUB_TOKEN}@github.com/Abeshith/your-repo-name HEAD:main
-          '''
+    environment {
+        DOCKER_IMAGE = 'abeshith/flask-web-app'
+        TAG = "latest"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
         }
-      }
-    }
 
-    // Deploy with Argo CD
-    stage('Deploy with Argo CD') {
-      steps {
-        withCredentials([string(credentialsId: 'argocd-token', variable: 'ARGO_TOKEN')]) {
-          sh '''
-            curl -X POST http://argocd.mycompany.com/api/v1/applications/flask-app/sync \
-              -H "Authorization: Bearer $ARGO_TOKEN" \
-              -H "Content-Type: application/json"
-          '''
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t $DOCKER_IMAGE:$TAG .'
+            }
         }
-      }
-    }
-  }
 
-  post {
-    always {
-      echo "Build completed"
+        stage('Push to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+                    sh 'echo "$PASSWORD" | docker login -u "$USERNAME" --password-stdin'
+                    sh 'docker push $DOCKER_IMAGE:$TAG'
+                }
+            }
+        }
+
+        stage('Clean Up') {
+            steps {
+                sh 'docker rmi $DOCKER_IMAGE:$TAG || true'
+            }
+        }
     }
-    success {
-      echo "Build was successful"
-    }
-    failure {
-      echo "Build failed, please check logs"
-    }
-  }
 }
