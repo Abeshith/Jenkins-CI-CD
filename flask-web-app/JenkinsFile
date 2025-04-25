@@ -23,7 +23,11 @@ pipeline {
     // Install necessary dependencies
     stage('Install Dependencies') {
       steps {
-        sh 'pip install flask  // Assuming you have a requirements.txt file
+        // Install Flask directly if you don't have a requirements.txt
+        sh 'pip install flask'
+        
+        // If you do have a requirements.txt, uncomment the following line:
+        // sh 'pip install -r requirements.txt'
       }
     }
 
